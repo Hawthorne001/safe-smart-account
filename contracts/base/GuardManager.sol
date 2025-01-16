@@ -2,10 +2,10 @@
 /* solhint-disable one-contract-per-file */
 pragma solidity >=0.7.0 <0.9.0;
 
-import {Enum} from "../libraries/Enum.sol";
-import {SelfAuthorized} from "../common/SelfAuthorized.sol";
-import {IERC165} from "../interfaces/IERC165.sol";
-import {IGuardManager} from "../interfaces/IGuardManager.sol";
+import {SelfAuthorized} from "./../common/SelfAuthorized.sol";
+import {IERC165} from "./../interfaces/IERC165.sol";
+import {IGuardManager} from "./../interfaces/IGuardManager.sol";
+import {Enum} from "./../libraries/Enum.sol";
 
 /**
  * @title ITransactionGuard Interface
@@ -41,7 +41,7 @@ interface ITransactionGuard is IERC165 {
     ) external;
 
     /**
-     * @notice Checks after execution of transaction.
+     * @notice Checks after execution of the transaction.
      * @dev The function needs to implement a check after the execution of the transaction.
      * @param hash The hash of the transaction.
      * @param success The status of the transaction execution.

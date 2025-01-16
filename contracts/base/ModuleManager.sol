@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 /* solhint-disable one-contract-per-file */
 pragma solidity >=0.7.0 <0.9.0;
-import {Enum} from "../libraries/Enum.sol";
-import {SelfAuthorized} from "../common/SelfAuthorized.sol";
+import {SelfAuthorized} from "./../common/SelfAuthorized.sol";
+import {IERC165} from "./../interfaces/IERC165.sol";
+import {IModuleManager} from "./../interfaces/IModuleManager.sol";
+import {Enum} from "./../libraries/Enum.sol";
 import {Executor} from "./Executor.sol";
-import {IModuleManager} from "../interfaces/IModuleManager.sol";
-import {IERC165} from "../interfaces/IERC165.sol";
 
 /**
  * @title IModuleGuard Interface
@@ -56,6 +56,9 @@ abstract contract BaseModuleGuard is IModuleGuard {
  * @author Richard Meissner - @rmeissner
  */
 abstract contract ModuleManager is SelfAuthorized, Executor, IModuleManager {
+    // SENTINEL_MODULES is used to traverse `modules`, so that:
+    //      1. `modules[SENTINEL_MODULES]` contains the first module
+    //      2. `modules[last_module]` points back to SENTINEL_MODULES
     address internal constant SENTINEL_MODULES = address(0x1);
 
     // keccak256("module_manager.module_guard.address")
@@ -66,7 +69,7 @@ abstract contract ModuleManager is SelfAuthorized, Executor, IModuleManager {
     /**
      * @notice Setup function sets the initial storage of the contract.
      *         Optionally executes a delegate call to another contract to setup the modules.
-     * @param to Optional destination address of call to execute.
+     * @param to Optional destination address of the call to execute.
      * @param data Optional data of call to execute.
      */
     function setupModules(address to, bytes memory data) internal {
@@ -74,7 +77,7 @@ abstract contract ModuleManager is SelfAuthorized, Executor, IModuleManager {
         modules[SENTINEL_MODULES] = SENTINEL_MODULES;
         if (to != address(0)) {
             if (!isContract(to)) revertWithError("GS002");
-            // Setup has to complete successfully or transaction fails.
+            // Setup has to complete successfully or the transaction fails.
             if (!execute(to, 0, data, Enum.Operation.DelegateCall, type(uint256).max)) revertWithError("GS000");
         }
     }
@@ -209,7 +212,7 @@ abstract contract ModuleManager is SelfAuthorized, Executor, IModuleManager {
         while (next != address(0) && next != SENTINEL_MODULES && moduleCount < pageSize) {
             array[moduleCount] = next;
             next = modules[next];
-            moduleCount++;
+            ++moduleCount;
         }
 
         /**
@@ -223,7 +226,7 @@ abstract contract ModuleManager is SelfAuthorized, Executor, IModuleManager {
         if (next != SENTINEL_MODULES) {
             next = array[moduleCount - 1];
         }
-        // Set correct size of returned array
+        // Set the correct size of the returned array
         /* solhint-disable no-inline-assembly */
         /// @solidity memory-safe-assembly
         assembly {
@@ -235,7 +238,7 @@ abstract contract ModuleManager is SelfAuthorized, Executor, IModuleManager {
     /**
      * @notice Returns true if `account` is a contract.
      * @dev This function will return false if invoked during the constructor of a contract,
-     *      as the code is not actually created until after the constructor finishes.
+     *      as the code is not created until after the constructor finishes.
      * @param account The address being queried
      */
     function isContract(address account) internal view returns (bool) {
@@ -257,10 +260,12 @@ abstract contract ModuleManager is SelfAuthorized, Executor, IModuleManager {
             revertWithError("GS301");
 
         bytes32 slot = MODULE_GUARD_STORAGE_SLOT;
-        // solhint-disable-next-line no-inline-assembly
+        /* solhint-disable no-inline-assembly */
+        /// @solidity memory-safe-assembly
         assembly {
             sstore(slot, moduleGuard)
         }
+        /* solhint-enable no-inline-assembly */
         emit ChangedModuleGuard(moduleGuard);
     }
 
@@ -270,10 +275,12 @@ abstract contract ModuleManager is SelfAuthorized, Executor, IModuleManager {
      */
     function getModuleGuard() internal view returns (address moduleGuard) {
         bytes32 slot = MODULE_GUARD_STORAGE_SLOT;
-        // solhint-disable-next-line no-inline-assembly
+        /* solhint-disable no-inline-assembly */
+        /// @solidity memory-safe-assembly
         assembly {
             moduleGuard := sload(slot)
         }
+        /* solhint-enable no-inline-assembly */
     }
 
     /**

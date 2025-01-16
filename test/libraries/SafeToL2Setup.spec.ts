@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import hre, { deployments, ethers } from "hardhat";
-import { getFactory, getSafeL2SingletonContract, getSafeSingletonContract, getSafeWithOwners } from "../utils/setup";
+import { getFactory, getSafe, getSafeL2Singleton, getSafeSingleton } from "../utils/setup";
 import { sameHexString } from "../utils/strings";
 import { executeContractCallWithSigners } from "../../src";
 import { EXPECTED_SAFE_STORAGE_LAYOUT, getContractStorageLayout } from "../utils/storage";
@@ -26,10 +26,11 @@ type HardhatTrace = {
 describe("SafeToL2Setup", () => {
     const setupTests = deployments.createFixture(async ({ deployments }) => {
         await deployments.fixture();
-        const safeToL2SetupLib = await (await hre.ethers.getContractFactory("SafeToL2Setup")).deploy();
-        const signers = await ethers.getSigners();
-        const safeSingleton = await getSafeSingletonContract();
-        const safeL2 = await getSafeL2SingletonContract();
+        const safeToL2SetupAddress = (await deployments.get("SafeToL2Setup")).address;
+        const safeToL2SetupLib = await hre.ethers.getContractAt("SafeToL2Setup", safeToL2SetupAddress);
+        const signers = await hre.ethers.getSigners();
+        const safeSingleton = await getSafeSingleton();
+        const safeL2 = await getSafeL2Singleton();
         const proxyFactory = await getFactory();
         return {
             safeToL2SetupLib,
@@ -121,15 +122,21 @@ describe("SafeToL2Setup", () => {
                     safeToL2SetupLib,
                     signers: [user1],
                 } = await setupTests();
-                const safe = await getSafeWithOwners([user1.address]);
+                const safe = await getSafe({ owners: [user1.address] });
                 const safeToL2SetupLibAddress = await safeToL2SetupLib.getAddress();
 
                 await expect(
                     executeContractCallWithSigners(safe, safeToL2SetupLib, "setupToL2", [safeToL2SetupLibAddress], [user1], true),
-                ).to.be.rejectedWith("GS013");
+                ).to.be.rejectedWith("Safe must have not executed any tx");
             });
 
             it("changes the expected storage slot without touching the most important ones", async () => {
+                if (hre.network.zksync) {
+                    // zksync doesn't support hardhat style traces
+                    // and their traces only include calls without the storage changes
+                    return;
+                }
+
                 const {
                     safeSingleton,
                     safeL2,
@@ -217,7 +224,7 @@ describe("SafeToL2Setup", () => {
             }
         });
 
-        it("should be a noop when the chain id is 1", async () => {
+        it("should be a noop when the chain id is 1 [@L1]", async () => {
             const {
                 safeSingleton,
                 safeL2,
@@ -225,7 +232,7 @@ describe("SafeToL2Setup", () => {
                 signers: [user1],
                 safeToL2SetupLib,
             } = await setupTests();
-            const safeSingeltonAddress = await safeSingleton.getAddress();
+            const safeSingletonAddress = await safeSingleton.getAddress();
             const safeL2SingletonAddress = await safeL2.getAddress();
             const safeToL2SetupCall = safeToL2SetupLib.interface.encodeFunctionData("setupToL2", [safeL2SingletonAddress]);
 
@@ -241,12 +248,12 @@ describe("SafeToL2Setup", () => {
             ]);
             const safeAddress = await proxyFactory.createProxyWithNonce.staticCall(safeSingleton.target, setupData, 0);
 
-            await expect(proxyFactory.createProxyWithNonce(safeSingeltonAddress, setupData, 0)).to.not.emit(
+            await expect(proxyFactory.createProxyWithNonce(safeSingletonAddress, setupData, 0)).to.not.emit(
                 safeToL2SetupLib.attach(safeAddress),
                 "ChangedMasterCopy",
             );
             const singletonInStorage = await hre.ethers.provider.getStorage(safeAddress, ethers.zeroPadValue("0x00", 32));
-            expect(sameHexString(singletonInStorage, ethers.zeroPadValue(safeSingeltonAddress, 32))).to.be.true;
+            expect(sameHexString(singletonInStorage, ethers.zeroPadValue(safeSingletonAddress, 32))).to.be.true;
         });
     });
 });
